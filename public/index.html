@@ -21,6 +21,8 @@
         #resultados { margin-top: 20px; background: #e8f5e9; padding: 15px; border-radius: 4px; display: none; }
         .sql-box { background: #263238; color: #aeea00; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 13px; margin-bottom: 10px; white-space: pre-wrap; }
         pre { background: white; padding: 10px; border-radius: 4px; border: 1px solid #c8e6c9; max-height: 250px; overflow-y: auto; }
+        .user-badge { background: #e0f2f1; padding: 10px; border-radius: 4px; margin-bottom: 15px; font-weight: bold; color: #00695c; display: flex; justify-content: space-between; align-items: center; }
+        .logout-btn { background-color: #c62828; width: auto; padding: 5px 10px; font-size: 12px; }
     </style>
 </head>
 <body>
@@ -43,7 +45,7 @@
             <label>Rol de Usuario (Control de Acceso):</label>
             <select id="rol">
                 <option value="admin">Administrador (Acceso Total)</option>
-                <option value="cajero">Cajero / Vendedor</option>
+                <option value="cajero">Cajero / Vendedor (Acceso Restringido)</option>
             </select>
         </div>
         <button onclick="login()">Ingresar al Sistema</button>
@@ -51,11 +53,16 @@
 
     <!-- PANEL DE CONTROL -->
     <div id="dashboard-section" style="display:none;">
+        <div class="user-badge">
+            <span id="user-info">Sesión activa</span>
+            <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
+        </div>
+
         <h3>Visualizar Tablas del Sistema</h3>
         <p>Haz clic para ver el contenido completo de cada tabla:</p>
         <div class="grid-buttons">
             <button class="btn-table" onclick="cargarTabla('sucursales')">Ver Tabla: Sucursales</button>
-            <button class="btn-table" onclick="cargarTabla('empleados')">Ver Tabla: Empleados</button>
+            <button class="btn-table" onclick="cargarTabla('empleados')">Ver Tabla: Empleados (🔒 Admin)</button>
             <button class="btn-table" onclick="cargarTabla('productos')">Ver Tabla: Productos</button>
             <button class="btn-table" onclick="cargarTabla('clientes')">Ver Tabla: Clientes</button>
             <button class="btn-table" onclick="cargarTabla('ventas')">Ver Tabla: Ventas</button>
@@ -69,16 +76,16 @@
             <button onclick="cargarConsulta('q2')">2. Ventas por Método de Pago</button>
             <button onclick="cargarConsulta('q3')">3. Facturación por Cliente (JOIN)</button>
             <button onclick="cargarConsulta('q4')">4. Ventas por Sucursal (JOIN)</button>
-            <button onclick="cargarConsulta('q5')">5. Empleados y Sucursales (JOIN)</button>
+            <button onclick="cargarConsulta('q5')">5. Empleados y Sucursales 🔒 (Admin)</button>
             <button onclick="cargarConsulta('q6')">6. Transacciones Recientes (JOIN)</button>
-            <button onclick="cargarConsulta('q7')">7. Ranking Empleados (RANK)</button>
+            <button onclick="cargarConsulta('q7')">7. Ranking Empleados 🔒 (Admin)</button>
             <button onclick="cargarConsulta('q8')">8. Compra Cruzada (Subconsultas)</button>
             <button onclick="cargarConsulta('q9')">9. Auditoría Crecimiento (CTE)</button>
             <button onclick="cargarConsulta('q10')">10. Súper Compradores (HAVING)</button>
         </div>
 
         <div id="resultados">
-            <h4>Comando SQL Utilizado:</h4>
+            <h4>Comando SQL / Estado de Seguridad:</h4>
             <div id="sql-output" class="sql-box">SELECT * FROM ...</div>
             
             <h4>Resultados de la Ejecución:</h4>
@@ -88,10 +95,11 @@
 </div>
 
 <script>
-    // Diccionario con los comandos SQL exactos para mostrar en pantalla
+    let usuarioActual = { correo: '', rol: '' };
+
     const sqlQueries = {
         'sucursales': 'SELECT * FROM sucursales;',
-        'empleados': 'SELECT * FROM empleados;',
+        'empleados': 'SELECT * FROM empleados; -- (Requiere Rol: Administrador)',
         'productos': 'SELECT * FROM productos;',
         'clientes': 'SELECT * FROM clientes;',
         'ventas': 'SELECT * FROM ventas;',
@@ -100,27 +108,45 @@
         'q2': 'SELECT metodo_pago, COUNT(*) AS total_transacciones FROM ventas GROUP BY metodo_pago;',
         'q3': 'SELECT c.nombre, c.correo, SUM(dv.subtotal) AS total_gastado \nFROM clientes c\nINNER JOIN ventas v ON c.id = v.cliente_id\nINNER JOIN detalle_ventas dv ON v.id = dv.venta_id\nGROUP BY c.id, c.nombre, c.correo;',
         'q4': 'SELECT s.nombre, s.ciudad, SUM(dv.cantidad) AS total_productos_vendidos \nFROM sucursales s\nINNER JOIN ventas v ON s.id = v.sucursal_id\nINNER JOIN detalle_ventas dv ON v.id = dv.venta_id\nGROUP BY s.id, s.nombre, s.ciudad;',
-        'q5': 'SELECT e.nombre, e.departamento, e.salario, s.nombre AS sucursal \nFROM empleados e\nINNER JOIN sucursales s ON e.sucursal_id = s.id;',
-        'q6': 'SELECT v.id AS venta_id, v.fecha, p.nombre AS producto, dv.cantidad \nFROM ventas v\nINNER JOIN detalle_ventas dv ON v.id = dv.venta_id\nINNER JOIN productos p ON dv.producto_id = p.id\nORDER BY v.fecha DESC;',
-        'q7': 'SELECT nombre, departamento, salario,\n       RANK() OVER (PARTITION BY departamento ORDER BY salario DESC) AS ranking_departamento\nFROM empleados;',
-        'q8': 'SELECT DISTINCT c.nombre, c.correo \nFROM clientes c\nJOIN ventas v ON c.id = v.cliente_id\nJOIN detalle_ventas dv ON v.id = dv.venta_id\nJOIN productos p ON dv.producto_id = p.id\nWHERE p.categoria = \'Cosmética\'\n  AND NOT EXISTS (\n      SELECT 1 FROM ventas v2 \n      JOIN detalle_ventas dv2 ON v2.id = dv2.venta_id \n      JOIN productos p2 ON dv2.producto_id = p2.id\n      WHERE v2.cliente_id = c.id AND p2.categoria = \'Alimentos\'\n  );',
-        'q9': 'WITH ventas_mes AS (\n    SELECT DATE_TRUNC(\'month\', fecha) AS mes, SUM(dv.subtotal) AS total_mes\n    FROM ventas v\n    JOIN detalle_ventas dv ON v.id = dv.venta_id\n    GROUP BY DATE_TRUNC(\'month\', fecha)\n)\nSELECT mes, total_mes,\n       LAG(total_mes, 1) OVER (ORDER BY mes) AS mes_anterior\nFROM ventas_mes;',
-        'q10': 'SELECT c.id, c.nombre, SUM(dv.subtotal) AS gasto_total\nFROM clientes c\nJOIN ventas v ON c.id = v.cliente_id\nJOIN detalle_ventas dv ON v.id = dv.venta_id\nGROUP BY c.id, c.nombre\nHAVING SUM(dv.subtotal) > 0;'
+        'q5': 'SELECT e.nombre, e.departamento, e.salario, s.nombre AS sucursal \nFROM empleados e INNER JOIN sucursales s ON e.sucursal_id = s.id; -- (🔒 Restringido)',
+        'q6': 'SELECT v.id AS venta_id, v.fecha, p.nombre AS producto, dv.cantidad \nFROM ventas v INNER JOIN detalle_ventas dv ON v.id = dv.venta_id INNER JOIN productos p ON dv.producto_id = p.id ORDER BY v.fecha DESC;',
+        'q7': 'SELECT nombre, departamento, salario, RANK() OVER (PARTITION BY departamento ORDER BY salario DESC) FROM empleados; -- (🔒 Restringido)',
+        'q8': 'SELECT DISTINCT c.nombre, c.correo FROM clientes c JOIN ventas v ON c.id = v.cliente_id JOIN detalle_ventas dv ON v.id = dv.venta_id JOIN productos p ON dv.producto_id = p.id WHERE p.categoria = \'Cosmética\' AND NOT EXISTS (...)',
+        'q9': 'WITH ventas_mes AS (...) SELECT mes, total_mes, LAG(total_mes) OVER (ORDER BY mes) FROM ventas_mes;',
+        'q10': 'SELECT c.id, c.nombre, SUM(dv.subtotal) AS gasto_total FROM clientes c JOIN ventas v ON c.id = v.cliente_id JOIN detalle_ventas dv ON v.id = dv.venta_id GROUP BY c.id, c.nombre HAVING SUM(dv.subtotal) > 0;'
     };
 
     function login() {
         const correo = document.getElementById('correo').value;
         const rol = document.getElementById('rol').value;
         if(correo) {
+            usuarioActual = { correo, rol };
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('dashboard-section').style.display = 'block';
-            alert(`¡Bienvenido! Sesión iniciada con rol: ${rol.toUpperCase()}`);
+            document.getElementById('user-info').textContent = `Usuario: ${correo} | Rol: ${rol.toUpperCase()}`;
         } else {
             alert('Por favor ingresa un correo');
         }
     }
 
+    function logout() {
+        document.getElementById('login-section').style.display = 'block';
+        document.getElementById('dashboard-section').style.display = 'none';
+        document.getElementById('resultados').style.display = 'none';
+    }
+
+    // Listado de rutas protegidas que un cajero NO puede ver por seguridad (PoLP)
+    const rutasRestringidas = ['empleados', 'q5', 'q7'];
+
     async function cargarTabla(nombreTabla) {
+        // Validación de Roles (RBAC & PoLP)
+        if (usuarioActual.rol === 'cajero' && rutasRestringidas.includes(nombreTabla)) {
+            document.getElementById('resultados').style.display = 'block';
+            document.getElementById('sql-output').textContent = `-- ACCESO DENEGADO (Políticas de Seguridad RBAC)\n-- El rol 'cajero' no tiene privilegios para ver datos de empleados ni salarios.`;
+            document.getElementById('data-output').textContent = 'ERROR 403: Acceso no autorizado. El Principio de Menor Privilegio (PoLP) restringe este recurso al rol de Administrador.';
+            return;
+        }
+
         document.getElementById('resultados').style.display = 'block';
         document.getElementById('sql-output').textContent = sqlQueries[nombreTabla];
         document.getElementById('data-output').textContent = 'Cargando datos de la tabla...';
@@ -134,6 +160,14 @@
     }
 
     async function cargarConsulta(endpoint) {
+        // Validación de Roles (RBAC & PoLP)
+        if (usuarioActual.rol === 'cajero' && rutasRestringidas.includes(endpoint)) {
+            document.getElementById('resultados').style.display = 'block';
+            document.getElementById('sql-output').textContent = `-- ACCESO DENEGADO (Políticas de Seguridad RBAC)\n-- El rol 'cajero' no tiene privilegios para ejecutar la consulta ${endpoint}.`;
+            document.getElementById('data-output').textContent = 'ERROR 403: Acceso no autorizado. El Principio de Menor Privilegio (PoLP) restringe este reporte confidencial al Administrador.';
+            return;
+        }
+
         document.getElementById('resultados').style.display = 'block';
         document.getElementById('sql-output').textContent = sqlQueries[endpoint];
         document.getElementById('data-output').textContent = 'Ejecutando consulta SQL...';
