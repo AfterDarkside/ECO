@@ -14,10 +14,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Función para crear tablas e insertar datos de prueba directamente
 async function inicializarBaseDeDatos() {
   try {
-    // 1. Crear las tablas si no existen
     await pool.query(`
       CREATE TABLE IF NOT EXISTS sucursales (
           id SERIAL PRIMARY KEY,
@@ -63,9 +61,7 @@ async function inicializarBaseDeDatos() {
           subtotal NUMERIC(10, 2) NOT NULL
       );
     `);
-    console.log("Tablas verificadas o creadas exitosamente en PostgreSQL.");
 
-    // 2. Insertar los datos de prueba de forma forzada y segura
     await pool.query(`
       INSERT INTO sucursales (id, nombre, ciudad) VALUES 
       (1, 'EcoMarket Central', 'Caracas'),
@@ -101,25 +97,130 @@ async function inicializarBaseDeDatos() {
       ON CONFLICT (id) DO NOTHING;
     `);
 
-    console.log("¡Datos de prueba insertados o verificados correctamente!");
-
+    console.log("Base de datos y datos de prueba listos.");
   } catch (err) {
     console.error("Error al inicializar la base de datos:", err);
   }
 }
 
-// Llamar a la función al iniciar
 inicializarBaseDeDatos();
 
-// Ruta de prueba para el Inventario Bajo
-app.get('/api/inventario-bajo', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM productos WHERE stock < (SELECT AVG(stock) FROM productos)');
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Error al consultar la base de datos');
-  }
+// --- LAS 10 CONSULTAS SQL DEL PROYECTO ---
+
+// 1. Inventario Bajo
+app.get('/api/q1', async (req, res) => {
+  const r = await pool.query('SELECT * FROM productos WHERE stock < (SELECT AVG(stock) FROM productos)');
+  res.json(r.rows);
+});
+
+// 2. Ventas por Método de Pago
+app.get('/api/q2', async (req, res) => {
+  const r = await pool.query('SELECT metodo_pago, COUNT(*) AS total_transacciones FROM ventas GROUP BY metodo_pago');
+  res.json(r.rows);
+});
+
+// 3. Facturación por Cliente (INNER JOIN 1)
+app.get('/api/q3', async (req, res) => {
+  const r = await pool.query(`
+    SELECT c.nombre, c.correo, SUM(dv.subtotal) AS total_gastado 
+    FROM clientes c
+    INNER JOIN ventas v ON c.id = v.cliente_id
+    INNER JOIN detalle_ventas dv ON v.id = dv.venta_id
+    GROUP BY c.id, c.nombre, c.correo
+  `);
+  res.json(r.rows);
+});
+
+// 4. Ventas por Sucursal (INNER JOIN 2)
+app.get('/api/q4', async (req, res) => {
+  const r = await pool.query(`
+    SELECT s.nombre, s.ciudad, SUM(dv.cantidad) AS total_productos_vendidos 
+    FROM sucursales s
+    INNER JOIN ventas v ON s.id = v.sucursal_id
+    INNER JOIN detalle_ventas dv ON v.id = dv.venta_id
+    GROUP BY s.id, s.nombre, s.ciudad
+  `);
+  res.json(r.rows);
+});
+
+// 5. Empleados y sus Sucursales (INNER JOIN 3)
+app.get('/api/q5', async (req, res) => {
+  const r = await pool.query(`
+    SELECT e.nombre, e.departamento, e.salario, s.nombre AS sucursal 
+    FROM empleados e
+    INNER JOIN sucursales s ON e.sucursal_id = s.id
+  `);
+  res.json(r.rows);
+});
+
+// 6. Detalle de Transacciones Recientes (INNER JOIN 4)
+app.get('/api/q6', async (req, res) => {
+  const r = await pool.query(`
+    SELECT v.id AS venta_id, v.fecha, p.nombre AS producto, dv.cantidad 
+    FROM ventas v
+    INNER JOIN detalle_ventas dv ON v.id = dv.venta_id
+    INNER JOIN productos p ON dv.producto_id = p.id
+    ORDER BY v.fecha DESC
+  `);
+  res.json(r.rows);
+});
+
+// 7. Ranking de Empleados por Departamento (RANK)
+app.get('/api/q7', async (req, res) => {
+  const r = await pool.query(`
+    SELECT nombre, departamento, salario,
+           RANK() OVER (PARTITION BY departamento ORDER BY salario DESC) AS ranking_departamento
+    FROM empleados
+  `);
+  res.json(r.rows);
+});
+
+// 8. Clientes con Compra Cruzada (Subconsultas Correlacionadas)
+app.get('/api/q8', async (req, res) => {
+  const r = await pool.query(`
+    SELECT DISTINCT c.nombre, c.correo 
+    FROM clientes c
+    JOIN ventas v ON c.id = v.cliente_id
+    JOIN detalle_ventas dv ON v.id = dv.venta_id
+    JOIN productos p ON dv.producto_id = p.id
+    WHERE p.categoria = 'Cosmética'
+      AND NOT EXISTS (
+          SELECT 1 FROM ventas v2 
+          JOIN detalle_ventas dv2 ON v2.id = dv2.venta_id 
+          JOIN productos p2 ON dv2.producto_id = p2.id
+          WHERE v2.cliente_id = c.id AND p2.categoria = 'Alimentos'
+      )
+  `);
+  res.json(r.rows);
+});
+
+// 9. Auditoría Mensual de Crecimiento (CTE)
+app.get('/api/q9', async (req, res) => {
+  const r = await pool.query(`
+    WITH ventas_mes AS (
+        SELECT DATE_TRUNC('month', fecha) AS mes, SUM(dv.subtotal) AS total_mes
+        FROM ventas v
+        JOIN detalle_ventas dv ON v.id = dv.venta_id
+        GROUP BY DATE_TRUNC('month', fecha)
+    )
+    SELECT mes, total_mes,
+           LAG(total_mes, 1) OVER (ORDER BY mes) AS mes_anterior
+    FROM ventas_mes
+  `);
+  res.json(r.rows);
+});
+
+// 10. Súper Compradores (HAVING)
+app.get('/api/q10', async (req, res) => {
+  const r = await pool.query(`
+    SELECT c.id, c.nombre, SUM(dv.subtotal) AS gasto_total
+    FROM clientes c
+    JOIN ventas v ON c.id = v.cliente_id
+    JOIN detalle_ventas dv ON v.id = dv.venta_id
+    GROUP BY c.id, c.nombre
+    HAVING SUM(dv.subtotal) > 0
+  `);
+  res.json(r.rows);
 });
 
 app.listen(port, () => {
