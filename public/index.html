@@ -6,39 +6,63 @@
     <title>EcoMarket Vital - Sistema de Gestión</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         h1 { color: #2e7d32; text-align: center; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { background-color: #2e7d32; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 16px; width: 100%; }
+        input, select { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px; }
+        button { background-color: #2e7d32; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 15px; margin: 5px 0; width: 100%; }
         button:hover { background-color: #1b5e20; }
-        #resultados { margin-top: 20px; background: #e8f5e9; padding: 15px; border-radius: 4px; display: none; }
+        .grid-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        #resultados { margin-top: 20px; background: #e8f5e9; padding: 15px; border-radius: 4px; display: none; max-height: 300px; overflow-y: auto; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>EcoMarket Vital</h1>
+    
+    <!-- LOGIN CON RBAC / SEGURIDAD -->
     <div id="login-section">
-        <h3>Iniciar Sesión (Seguridad RBAC / Login)</h3>
+        <h3>Iniciar Sesión (Seguridad RBAC & PoLP)</h3>
         <div class="form-group">
             <label>Correo Electrónico:</label>
-            <input type="email" id="correo" placeholder="admin@ecomarket.com">
+            <input type="email" id="correo" value="admin@ecomarket.com">
         </div>
         <div class="form-group">
             <label>Contraseña:</label>
-            <input type="password" id="password" placeholder="********">
+            <input type="password" id="password" value="123456">
+        </div>
+        <div class="form-group">
+            <label>Rol de Usuario (Control de Acceso):</label>
+            <select id="rol">
+                <option value="admin">Administrador (Acceso Total)</option>
+                <option value="cajero">Cajero / Vendedor</option>
+            </select>
         </div>
         <button onclick="login()">Ingresar al Sistema</button>
     </div>
 
+    <!-- PANEL DE REPORTES Y 10 CONSULTAS SQL -->
     <div id="dashboard-section" style="display:none;">
-        <h3>Panel de Control y Reportes SQL</h3>
-        <p>¡Bienvenido al sistema! Aquí puedes probar las consultas de la base de datos:</p>
-        <button onclick="cargarInventarioBajo()">Cargar Consulta: Inventario Bajo</button>
+        <h3>Panel de Control y 10 Consultas SQL</h3>
+        <p>Selecciona la consulta que deseas ejecutar:</p>
+        
+        <div class="grid-buttons">
+            <button onclick="cargarConsulta('q1')">1. Inventario Bajo</button>
+            <button onclick="cargarConsulta('q2')">2. Ventas por Método de Pago</button>
+            <button onclick="cargarConsulta('q3')">3. Facturación por Cliente (JOIN)</button>
+            <button onclick="cargarConsulta('q4')">4. Ventas por Sucursal (JOIN)</button>
+            <button onclick="cargarConsulta('q5')">5. Empleados y Sucursales (JOIN)</button>
+            <button onclick="cargarConsulta('q6')">6. Transacciones Recientes (JOIN)</button>
+            <button onclick="cargarConsulta('q7')">7. Ranking Empleados (RANK)</button>
+            <button onclick="cargarConsulta('q8')">8. Compra Cruzada (Subconsultas)</button>
+            <button onclick="cargarConsulta('q9')">9. Auditoría Crecimiento (CTE)</button>
+            <button onclick="cargarConsulta('q10')">10. Súper Compradores (HAVING)</button>
+        </div>
+
         <div id="resultados">
-            <h4>Resultados:</h4>
+            <h4>Resultados de la Consulta:</h4>
             <pre id="data-output">Cargando...</pre>
         </div>
     </div>
@@ -47,22 +71,25 @@
 <script>
     function login() {
         const correo = document.getElementById('correo').value;
+        const rol = document.getElementById('rol').value;
         if(correo) {
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('dashboard-section').style.display = 'block';
+            alert(`¡Bienvenido! Sesión iniciada con rol: ${rol.toUpperCase()}`);
         } else {
             alert('Por favor ingresa un correo');
         }
     }
 
-    async function cargarInventarioBajo() {
+    async function cargarConsulta(endpoint) {
         document.getElementById('resultados').style.display = 'block';
+        document.getElementById('data-output').textContent = 'Consultando la base de datos...';
         try {
-            const response = await fetch('/api/inventario-bajo');
+            const response = await fetch(`/api/${endpoint}`);
             const data = await response.json();
             document.getElementById('data-output').textContent = JSON.stringify(data, null, 2);
         } catch (error) {
-            document.getElementById('data-output').textContent = 'Error al conectar con la base de datos de Render.';
+            document.getElementById('data-output').textContent = 'Error al ejecutar la consulta.';
         }
     }
 </script>
