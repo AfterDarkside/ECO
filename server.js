@@ -97,7 +97,7 @@ async function inicializarBaseDeDatos() {
       // Clientes
       await pool.query(`
         INSERT INTO clientes (nombre, correo) VALUES 
-        ('Juan Silva', 'juan@mail.com'),
+        ('Samuel Hernandez', 'prueba@gmail.com'),
         ('María Torres', 'maria@mail.com');
       `);
 
