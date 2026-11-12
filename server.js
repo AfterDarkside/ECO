@@ -223,6 +223,24 @@ app.get('/api/q10', async (req, res) => {
   res.json(r.rows);
 });
 
+// Ruta NUEVA para consultar cualquier tabla completa dinámicamente
+app.get('/api/tabla/:nombre', async (req, res) => {
+  const nombreTabla = req.params.nombre;
+  const tablasPermitidas = ['sucursales', 'empleados', 'productos', 'clientes', 'ventas', 'detalle_ventas'];
+  
+  if (!tablasPermitidas.includes(nombreTabla)) {
+    return res.status(400).send('Tabla no permitida');
+  }
+
+  try {
+    const result = await pool.query(`SELECT * FROM ${nombreTabla}`);
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error al consultar la tabla');
+  }
+});
+
 app.listen(port, () => {
   console.log(`Servidor corriendo en el puerto ${port}`);
 });
