@@ -105,6 +105,31 @@ async function inicializarBaseDeDatos() {
 
 inicializarBaseDeDatos();
 
+// --- RUTA DE AUTENTICACIÓN SEGURA (LOGIN) ---
+app.post('/api/login', (req, res) => {
+  const { correo, password } = req.body;
+
+  // Cuentas fijas autorizadas con sus respectivos roles y restricciones
+  const usuariosAutorizados = [
+    { correo: 'admin@ecomarket.com', password: '123456', rol: 'admin', nombre: 'Administrador General' },
+    { correo: 'cajero@ecomarket.com', password: '123456', rol: 'cajero', nombre: 'Cajero Operativo' }
+  ];
+
+  const usuarioEncontrado = usuariosAutorizados.find(
+    u => u.correo === correo && u.password === password
+  );
+
+  if (usuarioEncontrado) {
+    res.json({ 
+      success: true, 
+      mensaje: 'Autenticación exitosa',
+      usuario: { nombre: usuarioEncontrado.nombre, correo: usuarioEncontrado.correo, rol: usuarioEncontrado.rol } 
+    });
+  } else {
+    res.status(401).json({ success: false, mensaje: 'Credenciales inválidas. Verifique su correo o contraseña.' });
+  }
+});
+
 // --- LAS 10 CONSULTAS SQL DEL PROYECTO ---
 
 // 1. Inventario Bajo
@@ -223,7 +248,7 @@ app.get('/api/q10', async (req, res) => {
   res.json(r.rows);
 });
 
-// Ruta NUEVA para consultar cualquier tabla completa dinámicamente
+// Ruta para consultar cualquier tabla completa dinámicamente
 app.get('/api/tabla/:nombre', async (req, res) => {
   const nombreTabla = req.params.nombre;
   const tablasPermitidas = ['sucursales', 'empleados', 'productos', 'clientes', 'ventas', 'detalle_ventas'];
