@@ -1,3 +1,20 @@
+const express = require('express');
+const { Pool } = require('pg');
+const path = require('path');
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+});
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Función para crear tablas e insertar datos de prueba directamente
 async function inicializarBaseDeDatos() {
   try {
     // 1. Crear las tablas si no existen
@@ -48,7 +65,7 @@ async function inicializarBaseDeDatos() {
     `);
     console.log("Tablas verificadas o creadas exitosamente en PostgreSQL.");
 
-    // 2. Insertar datos de prueba garantizados
+    // 2. Insertar los datos de prueba de forma forzada y segura
     await pool.query(`
       INSERT INTO sucursales (id, nombre, ciudad) VALUES 
       (1, 'EcoMarket Central', 'Caracas'),
@@ -84,9 +101,27 @@ async function inicializarBaseDeDatos() {
       ON CONFLICT (id) DO NOTHING;
     `);
 
-    console.log('¡Datos de prueba verificados con éxito!');
+    console.log("¡Datos de prueba insertados o verificados correctamente!");
 
   } catch (err) {
     console.error("Error al inicializar la base de datos:", err);
   }
 }
+
+// Llamar a la función al iniciar
+inicializarBaseDeDatos();
+
+// Ruta de prueba para el Inventario Bajo
+app.get('/api/inventario-bajo', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM productos WHERE stock < (SELECT AVG(stock) FROM productos)');
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error al consultar la base de datos');
+  }
+});
+
+app.listen(port, () => {
+  console.log(`Servidor corriendo en el puerto ${port}`);
+});
