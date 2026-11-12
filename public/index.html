@@ -11,7 +11,7 @@
         h3 { border-bottom: 2px solid #2e7d32; padding-bottom: 5px; margin-top: 25px; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input, select { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px; }
+        input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px; }
         button { background-color: #2e7d32; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 14px; margin: 4px 0; width: 100%; }
         button:hover { background-color: #1b5e20; }
         .btn-table { background-color: #0288d1; }
@@ -23,6 +23,7 @@
         pre { background: white; padding: 10px; border-radius: 4px; border: 1px solid #c8e6c9; max-height: 250px; overflow-y: auto; }
         .user-badge { background: #e0f2f1; padding: 10px; border-radius: 4px; margin-bottom: 15px; font-weight: bold; color: #00695c; display: flex; justify-content: space-between; align-items: center; }
         .logout-btn { background-color: #c62828; width: auto; padding: 5px 10px; font-size: 12px; }
+        .error-msg { color: #c62828; font-size: 13px; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -30,9 +31,10 @@
 <div class="container">
     <h1>EcoMarket Vital</h1>
     
-    <!-- LOGIN -->
+    <!-- LOGIN SEGURO -->
     <div id="login-section">
-        <h3>Iniciar Sesión (Seguridad RBAC & PoLP)</h3>
+        <h3>Iniciar Sesión (Autenticación & RBAC)</h3>
+        <p style="font-size: 13px; color: #555;">Usa <code>admin@ecomarket.com</code> o <code>cajero@ecomarket.com</code> (Clave: <code>123456</code>)</p>
         <div class="form-group">
             <label>Correo Electrónico:</label>
             <input type="email" id="correo" value="admin@ecomarket.com">
@@ -41,14 +43,8 @@
             <label>Contraseña:</label>
             <input type="password" id="password" value="123456">
         </div>
-        <div class="form-group">
-            <label>Rol de Usuario (Control de Acceso):</label>
-            <select id="rol">
-                <option value="admin">Administrador (Acceso Total)</option>
-                <option value="cajero">Cajero / Vendedor (Acceso Restringido)</option>
-            </select>
-        </div>
         <button onclick="login()">Ingresar al Sistema</button>
+        <div id="login-error" class="error-msg"></div>
     </div>
 
     <!-- PANEL DE CONTROL -->
@@ -59,7 +55,6 @@
         </div>
 
         <h3>Visualizar Tablas del Sistema</h3>
-        <p>Haz clic para ver el contenido completo de cada tabla:</p>
         <div class="grid-buttons">
             <button class="btn-table" onclick="cargarTabla('sucursales')">Ver Tabla: Sucursales</button>
             <button class="btn-table" onclick="cargarTabla('empleados')">Ver Tabla: Empleados (🔒 Admin)</button>
@@ -70,7 +65,6 @@
         </div>
 
         <h3>Panel de las 10 Consultas SQL</h3>
-        <p>Selecciona la consulta para ver su código SQL y sus resultados:</p>
         <div class="grid-buttons">
             <button onclick="cargarConsulta('q1')">1. Inventario Bajo</button>
             <button onclick="cargarConsulta('q2')">2. Ventas por Método de Pago</button>
@@ -106,77 +100,89 @@
         'detalle_ventas': 'SELECT * FROM detalle_ventas;',
         'q1': 'SELECT * FROM productos WHERE stock < (SELECT AVG(stock) FROM productos);',
         'q2': 'SELECT metodo_pago, COUNT(*) AS total_transacciones FROM ventas GROUP BY metodo_pago;',
-        'q3': 'SELECT c.nombre, c.correo, SUM(dv.subtotal) AS total_gastado \nFROM clientes c\nINNER JOIN ventas v ON c.id = v.cliente_id\nINNER JOIN detalle_ventas dv ON v.id = dv.venta_id\nGROUP BY c.id, c.nombre, c.correo;',
-        'q4': 'SELECT s.nombre, s.ciudad, SUM(dv.cantidad) AS total_productos_vendidos \nFROM sucursales s\nINNER JOIN ventas v ON s.id = v.sucursal_id\nINNER JOIN detalle_ventas dv ON v.id = dv.venta_id\nGROUP BY s.id, s.nombre, s.ciudad;',
-        'q5': 'SELECT e.nombre, e.departamento, e.salario, s.nombre AS sucursal \nFROM empleados e INNER JOIN sucursales s ON e.sucursal_id = s.id; -- (🔒 Restringido)',
-        'q6': 'SELECT v.id AS venta_id, v.fecha, p.nombre AS producto, dv.cantidad \nFROM ventas v INNER JOIN detalle_ventas dv ON v.id = dv.venta_id INNER JOIN productos p ON dv.producto_id = p.id ORDER BY v.fecha DESC;',
+        'q3': 'SELECT c.nombre, c.correo, SUM(dv.subtotal) AS total_gastado FROM clientes c INNER JOIN ventas v ON c.id = v.cliente_id INNER JOIN detalle_ventas dv ON v.id = dv.venta_id GROUP BY c.id, c.nombre, c.correo;',
+        'q4': 'SELECT s.nombre, s.ciudad, SUM(dv.cantidad) AS total_productos_vendidos FROM sucursales s INNER JOIN ventas v ON s.id = v.sucursal_id INNER JOIN detalle_ventas dv ON v.id = dv.venta_id GROUP BY s.id, s.nombre, s.ciudad;',
+        'q5': 'SELECT e.nombre, e.departamento, e.salario, s.nombre AS sucursal FROM empleados e INNER JOIN sucursales s ON e.sucursal_id = s.id; -- (🔒 Restringido)',
+        'q6': 'SELECT v.id AS venta_id, v.fecha, p.nombre AS producto, dv.cantidad FROM ventas v INNER JOIN detalle_ventas dv ON v.id = dv.venta_id INNER JOIN productos p ON dv.producto_id = p.id ORDER BY v.fecha DESC;',
         'q7': 'SELECT nombre, departamento, salario, RANK() OVER (PARTITION BY departamento ORDER BY salario DESC) FROM empleados; -- (🔒 Restringido)',
         'q8': 'SELECT DISTINCT c.nombre, c.correo FROM clientes c JOIN ventas v ON c.id = v.cliente_id JOIN detalle_ventas dv ON v.id = dv.venta_id JOIN productos p ON dv.producto_id = p.id WHERE p.categoria = \'Cosmética\' AND NOT EXISTS (...)',
         'q9': 'WITH ventas_mes AS (...) SELECT mes, total_mes, LAG(total_mes) OVER (ORDER BY mes) FROM ventas_mes;',
         'q10': 'SELECT c.id, c.nombre, SUM(dv.subtotal) AS gasto_total FROM clientes c JOIN ventas v ON c.id = v.cliente_id JOIN detalle_ventas dv ON v.id = dv.venta_id GROUP BY c.id, c.nombre HAVING SUM(dv.subtotal) > 0;'
     };
 
-    function login() {
+    async function login() {
         const correo = document.getElementById('correo').value;
-        const rol = document.getElementById('rol').value;
-        if(correo) {
-            usuarioActual = { correo, rol };
-            document.getElementById('login-section').style.display = 'none';
-            document.getElementById('dashboard-section').style.display = 'block';
-            document.getElementById('user-info').textContent = `Usuario: ${correo} | Rol: ${rol.toUpperCase()}`;
-        } else {
-            alert('Por favor ingresa un correo');
+        const password = document.getElementById('password').value;
+        const errorDiv = document.getElementById('login-error');
+        errorDiv.textContent = '';
+
+        try {
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ correo, password })
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                usuarioActual = data.usuario;
+                document.getElementById('login-section').style.display = 'none';
+                document.getElementById('dashboard-section').style.display = 'block';
+                document.getElementById('user-info').textContent = `Usuario: ${usuarioActual.nombre} | Rol: ${usuarioActual.rol.toUpperCase()}`;
+            } else {
+                errorDiv.textContent = data.mensaje;
+            }
+        } catch (error) {
+            errorDiv.textContent = 'Error de conexión con el servidor.';
         }
     }
 
     function logout() {
+        usuarioActual = { correo: '', rol: '' };
         document.getElementById('login-section').style.display = 'block';
         document.getElementById('dashboard-section').style.display = 'none';
         document.getElementById('resultados').style.display = 'none';
     }
 
-    // Listado de rutas protegidas que un cajero NO puede ver por seguridad (PoLP)
     const rutasRestringidas = ['empleados', 'q5', 'q7'];
 
     async function cargarTabla(nombreTabla) {
-        // Validación de Roles (RBAC & PoLP)
-        if (usuarioActual.rol === 'cajero' && rutasRestringidas.includes(nombreTabla)) {
+        if (usuarioActual.rol !== 'admin' && rutasRestringidas.includes(nombreTabla)) {
             document.getElementById('resultados').style.display = 'block';
-            document.getElementById('sql-output').textContent = `-- ACCESO DENEGADO (Políticas de Seguridad RBAC)\n-- El rol 'cajero' no tiene privilegios para ver datos de empleados ni salarios.`;
-            document.getElementById('data-output').textContent = 'ERROR 403: Acceso no autorizado. El Principio de Menor Privilegio (PoLP) restringe este recurso al rol de Administrador.';
+            document.getElementById('sql-output').textContent = `-- ACCESO DENEGADO (Políticas de Seguridad RBAC)\n-- El rol '${usuarioActual.rol}' no tiene privilegios para este recurso.`;
+            document.getElementById('data-output').textContent = 'ERROR 403: Acceso no autorizado. El Principio de Menor Privilegio (PoLP) restringe este recurso.';
             return;
         }
 
         document.getElementById('resultados').style.display = 'block';
         document.getElementById('sql-output').textContent = sqlQueries[nombreTabla];
-        document.getElementById('data-output').textContent = 'Cargando datos de la tabla...';
+        document.getElementById('data-output').textContent = 'Cargando datos...';
         try {
             const response = await fetch(`/api/tabla/${nombreTabla}`);
             const data = await response.json();
             document.getElementById('data-output').textContent = JSON.stringify(data, null, 2);
         } catch (error) {
-            document.getElementById('data-output').textContent = 'Error al consultar la tabla.';
+            document.getElementById('data-output').textContent = 'Error al consultar.';
         }
     }
 
     async function cargarConsulta(endpoint) {
-        // Validación de Roles (RBAC & PoLP)
-        if (usuarioActual.rol === 'cajero' && rutasRestringidas.includes(endpoint)) {
+        if (usuarioActual.rol !== 'admin' && rutasRestringidas.includes(endpoint)) {
             document.getElementById('resultados').style.display = 'block';
-            document.getElementById('sql-output').textContent = `-- ACCESO DENEGADO (Políticas de Seguridad RBAC)\n-- El rol 'cajero' no tiene privilegios para ejecutar la consulta ${endpoint}.`;
-            document.getElementById('data-output').textContent = 'ERROR 403: Acceso no autorizado. El Principio de Menor Privilegio (PoLP) restringe este reporte confidencial al Administrador.';
+            document.getElementById('sql-output').textContent = `-- ACCESO DENEGADO (Políticas de Seguridad RBAC)\n-- El rol '${usuarioActual.rol}' no tiene privilegios para la consulta ${endpoint}.`;
+            document.getElementById('data-output').textContent = 'ERROR 403: Acceso no autorizado. El Principio de Menor Privilegio (PoLP) restringe este reporte.';
             return;
         }
 
         document.getElementById('resultados').style.display = 'block';
         document.getElementById('sql-output').textContent = sqlQueries[endpoint];
-        document.getElementById('data-output').textContent = 'Ejecutando consulta SQL...';
+        document.getElementById('data-output').textContent = 'Ejecutando consulta...';
         try {
             const response = await fetch(`/api/${endpoint}`);
             const data = await response.json();
             document.getElementById('data-output').textContent = JSON.stringify(data, null, 2);
         } catch (error) {
-            document.getElementById('data-output').textContent = 'Error al ejecutar la consulta.';
+            document.getElementById('data-output').textContent = 'Error al ejecutar.';
         }
     }
 </script>
