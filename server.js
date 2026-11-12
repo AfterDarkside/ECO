@@ -14,9 +14,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Función para crear las tablas automáticamente al iniciar
+// Función para crear tablas e insertar datos de prueba automáticamente al iniciar
 async function inicializarBaseDeDatos() {
   try {
+    // 1. Crear las tablas si no existen
     await pool.query(`
       CREATE TABLE IF NOT EXISTS sucursales (
           id SERIAL PRIMARY KEY,
@@ -63,8 +64,64 @@ async function inicializarBaseDeDatos() {
       );
     `);
     console.log("Tablas verificadas o creadas exitosamente en PostgreSQL.");
+
+    // 2. Verificar si la tabla productos está vacía para insertar datos de prueba
+    const productosCheck = await pool.query('SELECT COUNT(*) FROM productos');
+    if (parseInt(productosCheck.rows[0].count) === 0) {
+      console.log('Insertando datos de prueba en la base de datos...');
+
+      // Sucursales
+      await pool.query(`
+        INSERT INTO sucursales (nombre, ciudad) VALUES 
+        ('EcoMarket Central', 'Caracas'),
+        ('EcoMarket Norte', 'Valencia');
+      `);
+
+      // Empleados
+      await pool.query(`
+        INSERT INTO empleados (nombre, departamento, salario, sucursal_id) VALUES 
+        ('Ana Pérez', 'Ventas', 450.00, 1),
+        ('Carlos Gómez', 'Almacén', 400.00, 1),
+        ('Sofía Rodríguez', 'Ventas', 480.00, 2);
+      `);
+
+      // Productos (con stock bajo y variado)
+      await pool.query(`
+        INSERT INTO productos (nombre, categoria, stock, precio) VALUES 
+        ('Shampoo Orgánico de Almendras', 'Cosmética', 4, 12.50),
+        ('Crema Facial Eco', 'Cosmética', 25, 20.00),
+        ('Arroz Integral Orgánico', 'Alimentos', 5, 3.00),
+        ('Aceite de Coco Vírgen', 'Alimentos', 30, 15.00);
+      `);
+
+      // Clientes
+      await pool.query(`
+        INSERT INTO clientes (nombre, correo) VALUES 
+        ('Juan Silva', 'juan@mail.com'),
+        ('María Torres', 'maria@mail.com');
+      `);
+
+      // Ventas
+      await pool.query(`
+        INSERT INTO ventas (cliente_id, sucursal_id, metodo_pago) VALUES 
+        (1, 1, 'Tarjeta'),
+        (2, 2, 'Efectivo');
+      `);
+
+      // Detalle de Ventas
+      await pool.query(`
+        INSERT INTO detalle_ventas (venta_id, producto_id, cantidad, subtotal) VALUES 
+        (1, 1, 2, 25.00),
+        (2, 3, 3, 9.00);
+      `);
+
+      console.log('¡Datos de prueba insertados con éxito!');
+    } else {
+      console.log("La base de datos ya contiene registros.");
+    }
+
   } catch (err) {
-    console.error("Error al crear las tablas:", err);
+    console.error("Error al inicializar la base de datos:", err);
   }
 }
 
