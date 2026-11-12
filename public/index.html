@@ -6,15 +6,21 @@
     <title>EcoMarket Vital - Sistema de Gestión</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px; }
-        .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .container { max-width: 950px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         h1 { color: #2e7d32; text-align: center; }
+        h3 { border-bottom: 2px solid #2e7d32; padding-bottom: 5px; margin-top: 25px; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; }
         input, select { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px; }
-        button { background-color: #2e7d32; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 15px; margin: 5px 0; width: 100%; }
+        button { background-color: #2e7d32; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 14px; margin: 4px 0; width: 100%; }
         button:hover { background-color: #1b5e20; }
+        .btn-table { background-color: #0288d1; }
+        .btn-table:hover { background-color: #01579b; }
         .grid-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        #resultados { margin-top: 20px; background: #e8f5e9; padding: 15px; border-radius: 4px; display: none; max-height: 300px; overflow-y: auto; }
+        
+        #resultados { margin-top: 20px; background: #e8f5e9; padding: 15px; border-radius: 4px; display: none; }
+        .sql-box { background: #263238; color: #aeea00; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 13px; margin-bottom: 10px; white-space: pre-wrap; }
+        pre { background: white; padding: 10px; border-radius: 4px; border: 1px solid #c8e6c9; max-height: 250px; overflow-y: auto; }
     </style>
 </head>
 <body>
@@ -22,7 +28,7 @@
 <div class="container">
     <h1>EcoMarket Vital</h1>
     
-    <!-- LOGIN CON RBAC / SEGURIDAD -->
+    <!-- LOGIN -->
     <div id="login-section">
         <h3>Iniciar Sesión (Seguridad RBAC & PoLP)</h3>
         <div class="form-group">
@@ -43,11 +49,21 @@
         <button onclick="login()">Ingresar al Sistema</button>
     </div>
 
-    <!-- PANEL DE REPORTES Y 10 CONSULTAS SQL -->
+    <!-- PANEL DE CONTROL -->
     <div id="dashboard-section" style="display:none;">
-        <h3>Panel de Control y 10 Consultas SQL</h3>
-        <p>Selecciona la consulta que deseas ejecutar:</p>
-        
+        <h3>Visualizar Tablas del Sistema</h3>
+        <p>Haz clic para ver el contenido completo de cada tabla:</p>
+        <div class="grid-buttons">
+            <button class="btn-table" onclick="cargarTabla('sucursales')">Ver Tabla: Sucursales</button>
+            <button class="btn-table" onclick="cargarTabla('empleados')">Ver Tabla: Empleados</button>
+            <button class="btn-table" onclick="cargarTabla('productos')">Ver Tabla: Productos</button>
+            <button class="btn-table" onclick="cargarTabla('clientes')">Ver Tabla: Clientes</button>
+            <button class="btn-table" onclick="cargarTabla('ventas')">Ver Tabla: Ventas</button>
+            <button class="btn-table" onclick="cargarTabla('detalle_ventas')">Ver Tabla: Detalle Ventas</button>
+        </div>
+
+        <h3>Panel de las 10 Consultas SQL</h3>
+        <p>Selecciona la consulta para ver su código SQL y sus resultados:</p>
         <div class="grid-buttons">
             <button onclick="cargarConsulta('q1')">1. Inventario Bajo</button>
             <button onclick="cargarConsulta('q2')">2. Ventas por Método de Pago</button>
@@ -62,13 +78,36 @@
         </div>
 
         <div id="resultados">
-            <h4>Resultados de la Consulta:</h4>
+            <h4>Comando SQL Utilizado:</h4>
+            <div id="sql-output" class="sql-box">SELECT * FROM ...</div>
+            
+            <h4>Resultados de la Ejecución:</h4>
             <pre id="data-output">Cargando...</pre>
         </div>
     </div>
 </div>
 
 <script>
+    // Diccionario con los comandos SQL exactos para mostrar en pantalla
+    const sqlQueries = {
+        'sucursales': 'SELECT * FROM sucursales;',
+        'empleados': 'SELECT * FROM empleados;',
+        'productos': 'SELECT * FROM productos;',
+        'clientes': 'SELECT * FROM clientes;',
+        'ventas': 'SELECT * FROM ventas;',
+        'detalle_ventas': 'SELECT * FROM detalle_ventas;',
+        'q1': 'SELECT * FROM productos WHERE stock < (SELECT AVG(stock) FROM productos);',
+        'q2': 'SELECT metodo_pago, COUNT(*) AS total_transacciones FROM ventas GROUP BY metodo_pago;',
+        'q3': 'SELECT c.nombre, c.correo, SUM(dv.subtotal) AS total_gastado \nFROM clientes c\nINNER JOIN ventas v ON c.id = v.cliente_id\nINNER JOIN detalle_ventas dv ON v.id = dv.venta_id\nGROUP BY c.id, c.nombre, c.correo;',
+        'q4': 'SELECT s.nombre, s.ciudad, SUM(dv.cantidad) AS total_productos_vendidos \nFROM sucursales s\nINNER JOIN ventas v ON s.id = v.sucursal_id\nINNER JOIN detalle_ventas dv ON v.id = dv.venta_id\nGROUP BY s.id, s.nombre, s.ciudad;',
+        'q5': 'SELECT e.nombre, e.departamento, e.salario, s.nombre AS sucursal \nFROM empleados e\nINNER JOIN sucursales s ON e.sucursal_id = s.id;',
+        'q6': 'SELECT v.id AS venta_id, v.fecha, p.nombre AS producto, dv.cantidad \nFROM ventas v\nINNER JOIN detalle_ventas dv ON v.id = dv.venta_id\nINNER JOIN productos p ON dv.producto_id = p.id\nORDER BY v.fecha DESC;',
+        'q7': 'SELECT nombre, departamento, salario,\n       RANK() OVER (PARTITION BY departamento ORDER BY salario DESC) AS ranking_departamento\nFROM empleados;',
+        'q8': 'SELECT DISTINCT c.nombre, c.correo \nFROM clientes c\nJOIN ventas v ON c.id = v.cliente_id\nJOIN detalle_ventas dv ON v.id = dv.venta_id\nJOIN productos p ON dv.producto_id = p.id\nWHERE p.categoria = \'Cosmética\'\n  AND NOT EXISTS (\n      SELECT 1 FROM ventas v2 \n      JOIN detalle_ventas dv2 ON v2.id = dv2.venta_id \n      JOIN productos p2 ON dv2.producto_id = p2.id\n      WHERE v2.cliente_id = c.id AND p2.categoria = \'Alimentos\'\n  );',
+        'q9': 'WITH ventas_mes AS (\n    SELECT DATE_TRUNC(\'month\', fecha) AS mes, SUM(dv.subtotal) AS total_mes\n    FROM ventas v\n    JOIN detalle_ventas dv ON v.id = dv.venta_id\n    GROUP BY DATE_TRUNC(\'month\', fecha)\n)\nSELECT mes, total_mes,\n       LAG(total_mes, 1) OVER (ORDER BY mes) AS mes_anterior\nFROM ventas_mes;',
+        'q10': 'SELECT c.id, c.nombre, SUM(dv.subtotal) AS gasto_total\nFROM clientes c\nJOIN ventas v ON c.id = v.cliente_id\nJOIN detalle_ventas dv ON v.id = dv.venta_id\nGROUP BY c.id, c.nombre\nHAVING SUM(dv.subtotal) > 0;'
+    };
+
     function login() {
         const correo = document.getElementById('correo').value;
         const rol = document.getElementById('rol').value;
@@ -81,9 +120,23 @@
         }
     }
 
+    async function cargarTabla(nombreTabla) {
+        document.getElementById('resultados').style.display = 'block';
+        document.getElementById('sql-output').textContent = sqlQueries[nombreTabla];
+        document.getElementById('data-output').textContent = 'Cargando datos de la tabla...';
+        try {
+            const response = await fetch(`/api/tabla/${nombreTabla}`);
+            const data = await response.json();
+            document.getElementById('data-output').textContent = JSON.stringify(data, null, 2);
+        } catch (error) {
+            document.getElementById('data-output').textContent = 'Error al consultar la tabla.';
+        }
+    }
+
     async function cargarConsulta(endpoint) {
         document.getElementById('resultados').style.display = 'block';
-        document.getElementById('data-output').textContent = 'Consultando la base de datos...';
+        document.getElementById('sql-output').textContent = sqlQueries[endpoint];
+        document.getElementById('data-output').textContent = 'Ejecutando consulta SQL...';
         try {
             const response = await fetch(`/api/${endpoint}`);
             const data = await response.json();
